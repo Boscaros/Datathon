@@ -1,69 +1,82 @@
+
 import streamlit as st
-import json
 import pandas as pd
+import spacy
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-# Funções auxiliares
+@st.cache_resource
+def carregar_spacy():
+    return spacy.load("pt_core_news_lg")
+
+nlp = carregar_spacy()
+
 def nivel_idioma_to_int(nivel):
     mapa = {"nenhum": 0, "básico": 1, "intermediário": 2, "avançado": 3, "fluente": 4}
-    return mapa.get(nivel.lower(), 0)
-
-def nivel_academico_to_int(nivel):
-    mapa = {
-        "ensino fundamental": 1,
-        "ensino médio": 2,
-        "ensino técnico completo": 3,
-        "ensino superior incompleto": 4,
-        "ensino superior cursando": 5,
-        "ensino superior completo": 6,
-        "pós-graduação": 7,
-        "mba": 8,
-        "mestrado": 9,
-        "doutorado": 10
-    }
-    return mapa.get(nivel.lower(), 0)
+    return mapa.get(str(nivel).lower(), 0)
 
 def comparar_idiomas(nivel_requerido, nivel_candidato):
     return nivel_idioma_to_int(nivel_candidato) >= nivel_idioma_to_int(nivel_requerido)
 
-def agente_top_candidatos(vaga, candidatos_ids, applicants, nivel_academico_minimo, top_k=5):
-    requisitos_tecnicos = " ".join(vaga.get("perfil_vaga", {}).get("competencia_tecnicas_e_comportamentais", "").split("\n"))
-    idioma_ingles_req = vaga.get("perfil_vaga", {}).get("nivel_ingles", "básico")
-    idioma_espanhol_req = vaga.get("perfil_vaga", {}).get("nivel_espanhol", "básico")
+def analisar_curriculo_com_spacy(cv_texto):
+    doc = nlp(cv_texto)
+    habilidades = [token.text.lower() for token in doc if token.pos_ in ["NOUN", "ADJ"]]
+    experiencia = [ent.text.lower() for ent in doc.ents if ent.label_ == "ORG"]
+    formacao = [ent.text.lower() for ent in doc.ents if ent.label_ == "EDUCATION"]
+    return {
+        "habilidades": habilidades,
+        "experiencia": experiencia,
+        "formacao": formacao
+    }
+
+def comparar_cv_com_vaga(cv_analise, requisitos_vaga):
+    doc_requisitos = nlp(requisitos_vaga.lower())
+    tokens_requisitos = [token.text for token in doc_requisitos if token.pos_ in ["NOUN", "ADJ"]]
+    entidades_requisitos = {ent.text.lower(): ent.label_ for ent in doc_requisitos.ents}
+    pontuacao = 0
+    pontuacao += len(set(cv_analise["habilidades"]) & set(tokens_requisitos)) * 2
+    pontuacao += len(set(cv_analise["experiencia"]) & set(entidades_requisitos.keys())) * 1.5
+    pontuacao += len(set(cv_analise["formacao"]) & set(entidades_requisitos.keys())) * 1
+    return pontuacao
+
+def agente_top_candidatos_df(vaga_id, applicants, vagas, prospects, top_k=5):
+    vaga = vagas[vagas["vaga_id"] == vaga_id].iloc[0]
+    requisitos_tecnicos = f"{vaga.get('competencia_tecnicas_e_comportamentais', '')} {vaga.get('principais_atividades', '')}"
+    idioma_ingles_req = vaga.get("nivel_ingles", "básico")
+    idioma_espanhol_req = vaga.get("nivel_espanhol", "básico")
+    candidatos_ids = prospects[prospects["codigo_vaga"] == vaga_id]["codigo"].unique()
 
     docs_tecnicos = []
     candidatos_info = []
 
     for cid in candidatos_ids:
-        candidato = applicants.get(str(cid))
-        if not candidato:
+        linha = applicants[applicants["codigo_profissional"] == cid]
+        if linha.empty:
             continue
-
-        formacao = candidato.get("formacao_e_idiomas", {})
-        nivel_academico = formacao.get("nivel_academico", "").strip()
-
-        if nivel_academico_to_int(nivel_academico) < nivel_academico_to_int(nivel_academico_minimo):
-            continue
-
-        conhecimentos = " ".join(
-            candidato.get("informacoes_profissionais", {}).get("conhecimentos_tecnicos", "").split(";")
-        )
+        candidato = linha.iloc[0]
+        conhecimentos = str(candidato.get("conhecimentos_tecnicos", ""))
+        if not conhecimentos or conhecimentos == 'nan':
+            conhecimentos = str(candidato.get("cv_pt", ""))
         docs_tecnicos.append(conhecimentos)
 
-        ingles_ok = comparar_idiomas(idioma_ingles_req, formacao.get("nivel_ingles", "nenhum"))
-        espanhol_ok = comparar_idiomas(idioma_espanhol_req, formacao.get("nivel_espanhol", "nenhum"))
+        ingles_ok = comparar_idiomas(idioma_ingles_req, candidato.get("nivel_ingles", "nenhum"))
+        espanhol_ok = comparar_idiomas(idioma_espanhol_req, candidato.get("nivel_espanhol", "nenhum"))
+
+        cv_texto = str(candidato.get("cv_pt", ""))
+        cv_analise = analisar_curriculo_com_spacy(cv_texto)
+        cv_score = comparar_cv_com_vaga(cv_analise, requisitos_tecnicos)
 
         candidatos_info.append({
             "id": cid,
-            "nome": candidato["informacoes_pessoais"]["nome"],
+            "nome": candidato.get("nome", ""),
             "conhecimentos": conhecimentos,
             "ingles_ok": ingles_ok,
-            "espanhol_ok": espanhol_ok
+            "espanhol_ok": espanhol_ok,
+            "cv_score": cv_score
         })
 
     if not docs_tecnicos:
-        return []
+        return pd.DataFrame(columns=["Nome", "ID", "Score"])
 
     vectorizer = TfidfVectorizer()
     tfidf_matrix = vectorizer.fit_transform([requisitos_tecnicos] + docs_tecnicos)
@@ -74,63 +87,36 @@ def agente_top_candidatos(vaga, candidatos_ids, applicants, nivel_academico_mini
     resultados = []
     for i, cand in enumerate(candidatos_info):
         match_idiomas = cand["ingles_ok"] and cand["espanhol_ok"]
-        score = similaridades[i] + (0.2 if match_idiomas else 0)
+        score = similaridades[i] + (0.2 if match_idiomas else 0) + (cand["cv_score"] * 0.1)
         resultados.append({
             "Nome": cand["nome"],
             "ID": cand["id"],
-            "Score": round(score, 4),
-            "Inglês OK": cand["ingles_ok"],
-            "Espanhol OK": cand["espanhol_ok"]
+            "Score": round(score, 5)
         })
 
-    return sorted(resultados, key=lambda x: x["Score"], reverse=True)[:top_k]
+    resultados_ordenados = sorted(resultados, key=lambda x: x["Score"], reverse=True)[:top_k]
+    return pd.DataFrame(resultados_ordenados)
 
-# ========== Streamlit App ==========
-st.title("🔍 Matching de Candidatos com Vagas")
+st.set_page_config(page_title="Recomendações de Candidatos", layout="wide")
+st.title("🔎 Recomendação de Candidatos por Vaga")
 
-st.sidebar.header("📂 Envie os arquivos JSON")
-file_applicants = st.sidebar.file_uploader("Applicants.json", type="json")
-file_jobs = st.sidebar.file_uploader("Jobs.json", type="json")
-file_prospects = st.sidebar.file_uploader("Prospects.json", type="json")
+@st.cache_data
+def carregar_dados():
+    applicants = pd.read_csv("https://raw.githubusercontent.com/Boscaros/last_work/refs/heads/main/applicants.csv")
+    vagas = pd.read_csv("https://raw.githubusercontent.com/Boscaros/last_work/refs/heads/main/vagas.csv")
+    prospects = pd.read_csv("https://raw.githubusercontent.com/Boscaros/last_work/refs/heads/main/prospects.csv")
+    return applicants, vagas, prospects
 
-if file_applicants and file_jobs and file_prospects:
-    applicants = json.load(file_applicants)
-    jobs = json.load(file_jobs)
-    prospects = json.load(file_prospects)
+applicants_df, vagas_df, prospects_df = carregar_dados()
 
-    st.success("Arquivos carregados com sucesso!")
+vaga_titulo = st.selectbox("Selecione o título da vaga:", vagas_df["titulo"].unique())
+vaga_id = vagas_df[vagas_df["titulo"] == vaga_titulo]["vaga_id"].iloc[0]
 
-    nome_para_codigo = {
-        vaga["informacoes_basicas"].get("titulo_vaga", f"Sem título ({codigo})"): codigo
-        for codigo, vaga in jobs.items()
-    }
+with st.spinner("Analisando candidatos..."):
+    resultado_df = agente_top_candidatos_df(vaga_id, applicants_df, vagas_df, prospects_df)
 
-    nome_selecionado = st.selectbox("Selecione a vaga", list(nome_para_codigo.keys()))
-    vaga_codigo = nome_para_codigo[nome_selecionado]
-    vaga = jobs[vaga_codigo]
-
-    nivel_academico_min = st.selectbox("Nível acadêmico mínimo exigido", [
-        "Ensino Fundamental", "Ensino Médio", "Ensino Técnico Completo",
-        "Ensino Superior Incompleto", "Ensino Superior Cursando",
-        "Ensino Superior Completo", "Pós-graduação", "MBA", "Mestrado", "Doutorado"
-    ])
-
-    candidatos_ids = [
-        c["codigo"] for c in prospects.get(vaga_codigo, {}).get("prospects", [])
-        if "codigo" in c
-    ]
-
-    st.markdown(f"**👔 Cliente:** {vaga['informacoes_basicas'].get('cliente', 'Não informado')}")
-    st.markdown(f"**🛠 Competências Técnicas:** {vaga['perfil_vaga'].get('competencia_tecnicas_e_comportamentais', 'Não informado')}")
-    st.markdown(f"**🌍 Idiomas exigidos:** Inglês - {vaga['perfil_vaga'].get('nivel_ingles', 'Básico')} | Espanhol - {vaga['perfil_vaga'].get('nivel_espanhol', 'Básico')}")
-
-    if st.button("🔎 Encontrar Top 5 Candidatos"):
-        top_candidatos = agente_top_candidatos(vaga, candidatos_ids, applicants, nivel_academico_min)
-        if top_candidatos:
-            st.subheader("🏆 Top 5 Candidatos")
-            df_resultado = pd.DataFrame(top_candidatos)
-            st.dataframe(df_resultado)
-        else:
-            st.warning("Nenhum candidato atende aos critérios da vaga.")
+if resultado_df.empty:
+    st.warning("Nenhum candidato encontrado.")
 else:
-    st.info("Carregue todos os arquivos JSON para iniciar.")
+    st.success(f"Top candidatos para a vaga: {vaga_titulo}")
+    st.dataframe(resultado_df, use_container_width=True)
