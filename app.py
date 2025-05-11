@@ -1,5 +1,5 @@
-
 import streamlit as st
+st.set_page_config(page_title="Recomendações de Candidatos", layout="wide")
 import pandas as pd
 import spacy
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -97,7 +97,7 @@ def agente_top_candidatos_df(vaga_id, applicants, vagas, prospects, top_k=5):
     resultados_ordenados = sorted(resultados, key=lambda x: x["Score"], reverse=True)[:top_k]
     return pd.DataFrame(resultados_ordenados)
 
-st.set_page_config(page_title="Recomendações de Candidatos", layout="wide")
+
 st.title("🔎 Recomendação de Candidatos por Vaga")
 
 @st.cache_data
@@ -110,7 +110,7 @@ def carregar_dados():
 applicants_df, vagas_df, prospects_df = carregar_dados()
 
 vaga_titulo = st.selectbox("Selecione o título da vaga:", vagas_df["titulo"].unique())
-vaga_id = vagas_df[vagas_df["titulo"] == vaga_titulo]["vaga_id"].iloc[0]
+vaga_id = vagas_df[vagas_df["titulo_vaga"] == vaga_titulo]["vaga_id"].iloc[0]
 
 with st.spinner("Analisando candidatos..."):
     resultado_df = agente_top_candidatos_df(vaga_id, applicants_df, vagas_df, prospects_df)
