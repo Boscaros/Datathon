@@ -82,7 +82,7 @@ with st.spinner("Analisando candidatos..."):
     resultado_df = agente_top_candidatos_df(vaga_id, applicants_df, vagas_df, prospects_df)
 
 if resultado_df.empty:
-    st.warning("Nenhum candidato encontrado.")
+    st.warning("Candidatos atuais não atingem requiremento necessário, aguarde novas candidaturas.")
 else:
     st.success(f"Top candidatos para a vaga: {vaga_titulo}")
     st.dataframe(resultado_df, use_container_width=True)
