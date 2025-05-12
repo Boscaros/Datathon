@@ -1,12 +1,10 @@
 
 import streamlit as st
 import pandas as pd
-import pt_core_news_lg
+import spacy
+nlp = spacy.load("pt_core_news_lg")
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-
-def carregar_spacy():
-    return pt_core_news_lg.load()
 
 nlp = carregar_spacy()
 
