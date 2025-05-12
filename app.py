@@ -75,8 +75,8 @@ def carregar_dados():
 
 applicants_df, vagas_df, prospects_df = carregar_dados()
 
-vaga_titulo = st.selectbox("Selecione o título da vaga:", vagas_df["titulo"].unique())
-vaga_id = vagas_df[vagas_df["titulo"] == vaga_titulo]["vaga_id"].iloc[0]
+vaga_titulo = st.selectbox("Selecione o título da vaga:", vagas_df["titulo_vaga"].unique())
+vaga_id = vagas_df[vagas_df["titulo_vaga"] == vaga_titulo]["vaga_id"].iloc[0]
 
 with st.spinner("Analisando candidatos..."):
     resultado_df = agente_top_candidatos_df(vaga_id, applicants_df, vagas_df, prospects_df)
