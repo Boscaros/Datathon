@@ -1,11 +1,8 @@
 
 import streamlit as st
 import pandas as pd
-import spacy
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-
-nlp = spacy.load("pt_core_news_sm")
 
 def nivel_idioma_to_int(nivel):
     mapa = {"nenhum": 0, "básico": 1, "intermediário": 2, "avançado": 3, "fluente": 4}
@@ -13,27 +10,6 @@ def nivel_idioma_to_int(nivel):
 
 def comparar_idiomas(nivel_requerido, nivel_candidato):
     return nivel_idioma_to_int(nivel_candidato) >= nivel_idioma_to_int(nivel_requerido)
-
-def analisar_curriculo_com_spacy(cv_texto):
-    doc = nlp(cv_texto)
-    habilidades = [token.text.lower() for token in doc if token.pos_ in ["NOUN", "ADJ"]]
-    experiencia = [ent.text.lower() for ent in doc.ents if ent.label_ == "ORG"]
-    formacao = [ent.text.lower() for ent in doc.ents if ent.label_ == "EDUCATION"]
-    return {
-        "habilidades": habilidades,
-        "experiencia": experiencia,
-        "formacao": formacao
-    }
-
-def comparar_cv_com_vaga(cv_analise, requisitos_vaga):
-    doc_requisitos = nlp(requisitos_vaga.lower())
-    tokens_requisitos = [token.text for token in doc_requisitos if token.pos_ in ["NOUN", "ADJ"]]
-    entidades_requisitos = {ent.text.lower(): ent.label_ for ent in doc_requisitos.ents}
-    pontuacao = 0
-    pontuacao += len(set(cv_analise["habilidades"]) & set(tokens_requisitos)) * 2
-    pontuacao += len(set(cv_analise["experiencia"]) & set(entidades_requisitos.keys())) * 1.5
-    pontuacao += len(set(cv_analise["formacao"]) & set(entidades_requisitos.keys())) * 1
-    return pontuacao
 
 def agente_top_candidatos_df(vaga_id, applicants, vagas, prospects, top_k=5):
     vaga = vagas[vagas["vaga_id"] == vaga_id].iloc[0]
@@ -58,17 +34,11 @@ def agente_top_candidatos_df(vaga_id, applicants, vagas, prospects, top_k=5):
         ingles_ok = comparar_idiomas(idioma_ingles_req, candidato.get("nivel_ingles", "nenhum"))
         espanhol_ok = comparar_idiomas(idioma_espanhol_req, candidato.get("nivel_espanhol", "nenhum"))
 
-        cv_texto = str(candidato.get("cv_pt", ""))
-        cv_analise = analisar_curriculo_com_spacy(cv_texto)
-        cv_score = comparar_cv_com_vaga(cv_analise, requisitos_tecnicos)
-
         candidatos_info.append({
             "id": cid,
             "nome": candidato.get("nome", ""),
             "conhecimentos": conhecimentos,
-            "ingles_ok": ingles_ok,
-            "espanhol_ok": espanhol_ok,
-            "cv_score": cv_score
+            "bonus_idioma": 0.2 if ingles_ok and espanhol_ok else 0.0
         })
 
     if not docs_tecnicos:
@@ -82,8 +52,7 @@ def agente_top_candidatos_df(vaga_id, applicants, vagas, prospects, top_k=5):
 
     resultados = []
     for i, cand in enumerate(candidatos_info):
-        match_idiomas = cand["ingles_ok"] and cand["espanhol_ok"]
-        score = similaridades[i] + (0.2 if match_idiomas else 0) + (cand["cv_score"] * 0.1)
+        score = similaridades[i] + cand["bonus_idioma"]
         resultados.append({
             "Nome": cand["nome"],
             "ID": cand["id"],
