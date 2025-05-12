@@ -2,11 +2,10 @@
 import streamlit as st
 import pandas as pd
 import spacy
-nlp = spacy.load("pt_core_news_lg")
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-nlp = carregar_spacy()
+nlp = spacy.load("pt_core_news_sm")
 
 def nivel_idioma_to_int(nivel):
     mapa = {"nenhum": 0, "básico": 1, "intermediário": 2, "avançado": 3, "fluente": 4}
@@ -95,7 +94,6 @@ def agente_top_candidatos_df(vaga_id, applicants, vagas, prospects, top_k=5):
     return pd.DataFrame(resultados_ordenados)
 
 # Streamlit app
-import streamlit as st
 st.set_page_config(page_title="Recomendações de Candidatos", layout="wide")
 st.title("🔎 Recomendação de Candidatos por Vaga")
 
