@@ -4,3 +4,4 @@ pandas==2.2.3
 numpy==2.1.0
 scikit-learn==1.6.1
 spacy==3.8.5
+https://github.com/explosion/spacy-models/releases/download/pt_core_news_lg-3.5.0/pt_core_news_lg-3.5.0-py3-none-any.whl
