@@ -86,3 +86,10 @@ if resultado_df.empty:
 else:
     st.success(f"Melhores candidatos para a vaga: {vaga_titulo}")
     st.dataframe(resultado_df, use_container_width=True)
+
+# Rodapé
+st.markdown("---")
+st.markdown("📌 Para atualizar a base de dados, edite os arquivos CSV no GitHub, não recomendamos usar Jsons pois eles são mais pesados e dificeis de trabalhar:")
+st.markdown("- [applicants.csv](https://github.com/Boscaros/last_work/blob/main/applicants.csv)")
+st.markdown("- [vagas.csv](https://github.com/Boscaros/last_work/blob/main/vagas.csv)")
+st.markdown("- [prospects.csv](https://github.com/Boscaros/last_work/blob/main/prospects.csv)")
