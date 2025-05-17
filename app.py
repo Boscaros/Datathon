@@ -63,8 +63,8 @@ def agente_top_candidatos_df(vaga_id, applicants, vagas, prospects, top_k=5):
     return pd.DataFrame(resultados_ordenados)
 
 # Streamlit app
-st.set_page_config(page_title="Recomendações de Candidatos", layout="wide")
-st.title("🔎 Recomendação de Candidatos")
+st.set_page_config(page_title="Recomendações de Candidatos empresa Decision", layout="wide")
+st.title("Recomendação de Candidatos")
 
 @st.cache_data
 def carregar_dados():
