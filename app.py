@@ -4,22 +4,22 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-def nivel_idioma_to_int(nivel):
+def nivel_idioma(nivel):
     mapa = {"nenhum": 0, "básico": 1, "intermediário": 2, "avançado": 3, "fluente": 4}
     return mapa.get(str(nivel).lower(), 0)
 
 def comparar_idiomas(nivel_requerido, nivel_candidato):
-    return nivel_idioma_to_int(nivel_candidato) >= nivel_idioma_to_int(nivel_requerido)
+    return nivel_idioma(nivel_candidato) >= nivel_idioma(nivel_requerido)
 
 def agente_top_candidatos_df(vaga_id, applicants, vagas, prospects, top_k=5):
     vaga = vagas[vagas["vaga_id"] == vaga_id].iloc[0]
     requisitos_tecnicos = f"{vaga.get('competencia_tecnicas_e_comportamentais', '')} {vaga.get('principais_atividades', '')}"
-    idioma_ingles_req = vaga.get("nivel_ingles", "básico")
-    idioma_espanhol_req = vaga.get("nivel_espanhol", "básico")
+    idioma_ingles = vaga.get("nivel_ingles", "básico")
+    idioma_espanhol = vaga.get("nivel_espanhol", "básico")
     candidatos_ids = prospects[prospects["codigo_vaga"] == vaga_id]["codigo"].unique()
 
-    docs_tecnicos = []
-    candidatos_info = []
+    documentos_tecnicos = []
+    candidatos = []
 
     for cid in candidatos_ids:
         linha = applicants[applicants["codigo_profissional"] == cid]
@@ -29,10 +29,10 @@ def agente_top_candidatos_df(vaga_id, applicants, vagas, prospects, top_k=5):
         conhecimentos = str(candidato.get("conhecimentos_tecnicos", ""))
         if not conhecimentos or conhecimentos == 'nan':
             conhecimentos = str(candidato.get("cv_pt", ""))
-        docs_tecnicos.append(conhecimentos)
+        documentos_tecnicos.append(conhecimentos)
 
-        ingles_ok = comparar_idiomas(idioma_ingles_req, candidato.get("nivel_ingles", "nenhum"))
-        espanhol_ok = comparar_idiomas(idioma_espanhol_req, candidato.get("nivel_espanhol", "nenhum"))
+        ingles_ok = comparar_idiomas(idioma_ingles, candidato.get("nivel_ingles", "nenhum"))
+        espanhol_ok = comparar_idiomas(idioma_espanhol, candidato.get("nivel_espanhol", "nenhum"))
 
         candidatos_info.append({
             "id": cid,
@@ -45,17 +45,17 @@ def agente_top_candidatos_df(vaga_id, applicants, vagas, prospects, top_k=5):
         return pd.DataFrame(columns=["Nome", "ID", "Score"])
 
     vectorizer = TfidfVectorizer()
-    tfidf_matrix = vectorizer.fit_transform([requisitos_tecnicos] + docs_tecnicos)
+    tfidf_matrix = vectorizer.fit_transform([requisitos_tecnicos] + documentos_tecnicos)
     vaga_vector = tfidf_matrix[0]
     candidatos_vectors = tfidf_matrix[1:]
     similaridades = cosine_similarity(vaga_vector, candidatos_vectors).flatten()
 
     resultados = []
-    for i, cand in enumerate(candidatos_info):
-        score = similaridades[i] + cand["bonus_idioma"]
+    for i, r in enumerate(candidatos):
+        score = similaridades[i] + r["bonus_idioma"]
         resultados.append({
-            "Nome": cand["nome"],
-            "ID": cand["id"],
+            "Nome": r["nome"],
+            "ID": r["id"],
             "Score": round(score, 5)
         })
 
