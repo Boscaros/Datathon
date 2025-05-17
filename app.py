@@ -64,7 +64,7 @@ def agente_top_candidatos_df(vaga_id, applicants, vagas, prospects, top_k=5):
 
 # Streamlit app
 st.set_page_config(page_title="Recomendações de Candidatos", layout="wide")
-st.title("🔎 Recomendação de Candidatos por Vaga")
+st.title("🔎 Recomendação de Candidatos")
 
 @st.cache_data
 def carregar_dados():
@@ -75,7 +75,7 @@ def carregar_dados():
 
 applicants_df, vagas_df, prospects_df = carregar_dados()
 
-vaga_titulo = st.selectbox("Selecione o título da vaga:", vagas_df["titulo_vaga"].unique())
+vaga_titulo = st.selectbox("Selecione a vaga:", vagas_df["titulo_vaga"].unique())
 vaga_id = vagas_df[vagas_df["titulo_vaga"] == vaga_titulo]["vaga_id"].iloc[0]
 
 with st.spinner("Analisando candidatos..."):
@@ -84,5 +84,5 @@ with st.spinner("Analisando candidatos..."):
 if resultado_df.empty:
     st.warning("Candidatos atuais não atingem requiremento necessário, aguarde novas candidaturas.")
 else:
-    st.success(f"Top candidatos para a vaga: {vaga_titulo}")
+    st.success(f"Melhores candidatos para a vaga: {vaga_titulo}")
     st.dataframe(resultado_df, use_container_width=True)
