@@ -34,14 +34,14 @@ def agente_top_candidatos_df(vaga_id, applicants, vagas, prospects, top_k=5):
         ingles_ok = comparar_idiomas(idioma_ingles, candidato.get("nivel_ingles", "nenhum"))
         espanhol_ok = comparar_idiomas(idioma_espanhol, candidato.get("nivel_espanhol", "nenhum"))
 
-        candidatos_info.append({
+        candidatos.append({
             "id": cid,
             "nome": candidato.get("nome", ""),
             "conhecimentos": conhecimentos,
             "bonus_idioma": 0.2 if ingles_ok and espanhol_ok else 0.0
         })
 
-    if not docs_tecnicos:
+    if not documentos_tecnicos:
         return pd.DataFrame(columns=["Nome", "ID", "Score"])
 
     vectorizer = TfidfVectorizer()
