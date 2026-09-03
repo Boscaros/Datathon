@@ -1,0 +1,29 @@
+﻿# Dados brutos (muito grandes para o GitHub)
+*.json
+!package.json
+
+# Parquet temporários fora da pasta data/
+*.parquet
+!data/*.parquet
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+env/
+venv/
+.env
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Imagens geradas localmente
+elbow_curve.png
+cluster_pca.png
+*.log
+
+# IDEs
+.vscode/
+.idea/
+*.swp
