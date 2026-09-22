@@ -213,6 +213,7 @@ with st.sidebar:
         "Navegação",
         ["🏠  Home", "🎯  Motor de Match", "🔬  Clustering", "🤖  Copiloto"],
         label_visibility="collapsed",
+        key="nav_pagina",
     )
 
     st.divider()
@@ -311,7 +312,7 @@ if "Home" in pagina:
             margin=dict(l=10, r=10, t=10, b=10),
         )
         fig_origem.update_traces(textfont_color="white", textinfo="percent+label")
-        st.plotly_chart(fig_origem, use_container_width=True)
+        st.plotly_chart(fig_origem, use_container_width=True, key="chart_origem")
 
     # ── Top skills nas vagas ───────────────────────────────────────
     with col_b:
@@ -334,7 +335,7 @@ if "Home" in pagina:
             margin=dict(l=10, r=10, t=10, b=10),
         )
         fig_skills.update_traces(marker_line_width=0)
-        st.plotly_chart(fig_skills, use_container_width=True)
+        st.plotly_chart(fig_skills, use_container_width=True, key="chart_skills_vagas")
 
     st.divider()
 
@@ -361,7 +362,7 @@ if "Home" in pagina:
             margin=dict(l=10, r=10, t=10, b=10),
         )
         fig_skills_t.update_traces(marker_line_width=0)
-        st.plotly_chart(fig_skills_t, use_container_width=True)
+        st.plotly_chart(fig_skills_t, use_container_width=True, key="chart_skills_talentos")
 
     # ── Distribuição de skills por talento ────────────────────────
     with col_d:
@@ -379,7 +380,7 @@ if "Home" in pagina:
             font_color="#CCCCCC", showlegend=False,
             margin=dict(l=10, r=10, t=10, b=10),
         )
-        st.plotly_chart(fig_hist, use_container_width=True)
+        st.plotly_chart(fig_hist, use_container_width=True, key="chart_hist_skills")
 
     st.divider()
     st.markdown("### 📋 Amostra — Vagas Carregadas")
@@ -500,7 +501,7 @@ elif "Match" in pagina:
             height=max(300, len(df_plot) * 38),
         )
         fig_score.update_traces(textposition="outside", textfont_color="white", marker_line_width=0)
-        st.plotly_chart(fig_score, use_container_width=True)
+        st.plotly_chart(fig_score, use_container_width=True, key="chart_match_score")
 
         st.divider()
         st.markdown("### 👥 Candidatos Recomendados")
@@ -568,7 +569,7 @@ elif "Match" in pagina:
         with st.expander("📥 Exportar resultado como tabela"):
             st.dataframe(df_res, use_container_width=True, hide_index=True)
             csv = df_res.to_csv(index=False).encode("utf-8")
-            st.download_button("⬇️ Baixar CSV", csv, f"match_vaga_{id_vaga_sel}.csv", "text/csv")
+            st.download_button("⬇️ Baixar CSV", csv, f"match_vaga_{id_vaga_sel}.csv", "text/csv", key="btn_download_csv_match")
 
     else:
         st.info("Selecione uma vaga e clique em **Buscar Candidatos**.")
@@ -680,7 +681,7 @@ elif "Clustering" in pagina:
             # Linha do K selecionado
             fig_el.add_vline(x=k_fin_u, line_dash="dash", line_color="#FFB347",
                              annotation_text=f"K={k_fin_u}", annotation_font_color="#FFB347")
-            st.plotly_chart(fig_el, use_container_width=True)
+            st.plotly_chart(fig_el, use_container_width=True, key="chart_elbow")
 
             # Silhouette
             ks_sil = [k for k, s in zip(ks, silhs) if s is not None]
@@ -705,7 +706,7 @@ elif "Clustering" in pagina:
                 fig_sil.add_vline(x=best_k_sil, line_dash="dash", line_color="#FF6584",
                                   annotation_text=f"melhor K={best_k_sil}",
                                   annotation_font_color="#FF6584")
-            st.plotly_chart(fig_sil, use_container_width=True)
+            st.plotly_chart(fig_sil, use_container_width=True, key="chart_silhouette")
 
         # ── Scatter PCA ────────────────────────────────────────────
         with col_scat:
@@ -739,7 +740,7 @@ elif "Clustering" in pagina:
                 height=500,
             )
             fig_pca.update_traces(marker_line_width=0.5, marker_line_color="white")
-            st.plotly_chart(fig_pca, use_container_width=True)
+            st.plotly_chart(fig_pca, use_container_width=True, key="chart_pca")
 
         st.divider()
 
@@ -802,7 +803,7 @@ elif "Clustering" in pagina:
             font_color="#CCCCCC", showlegend=False,
             margin=dict(l=10, r=10, t=10, b=10),
         )
-        st.plotly_chart(fig_box, use_container_width=True)
+        st.plotly_chart(fig_box, use_container_width=True, key="chart_boxplot")
 
     else:
         st.info("Configure os parâmetros e clique em **▶ Executar Clustering**.")
@@ -903,16 +904,24 @@ elif "Copiloto" in pagina:
 
     col_key, col_mod = st.columns([3, 1])
     with col_key:
+        secret_key = ""
+        try:
+            secret_key = st.secrets.get("GEMINI_API_KEY", "")
+        except Exception:
+            pass
+        default_key = secret_key or os.environ.get("GEMINI_API_KEY", "")
+
         api_key_input = st.text_input(
             "🔑 Gemini API Key",
-            value=os.environ.get("GEMINI_API_KEY", ""),
+            value=default_key,
             type="password",
-            placeholder="AIzaSy... (deixe vazio para modo demo offline)",
+            placeholder="AIzaSy... (ou configurada nos Secrets)",
+            key="cop_api_key",
         )
     with col_mod:
-        modelo_sel = st.selectbox("Modelo", ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"])
+        modelo_sel = st.selectbox("Modelo", ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"], key="cop_modelo_sel")
 
-    if st.button("✨ Gerar Roteiro de Entrevista", use_container_width=True):
+    if st.button("✨ Gerar Roteiro de Entrevista", use_container_width=True, key="btn_gerar_roteiro"):
         with st.spinner("🤖 Gerando roteiro com IA..."):
             roteiro = gerar_roteiro_entrevista(
                 vaga_skills      = vaga_skills_input,
@@ -947,6 +956,7 @@ elif "Copiloto" in pagina:
                 f"roteiro_{meta['vaga'][:20].replace(' ','_')}.md",
                 "text/markdown",
                 use_container_width=True,
+                key="btn_download_roteiro_md",
             )
 
         # Renderiza em abas por bloco
