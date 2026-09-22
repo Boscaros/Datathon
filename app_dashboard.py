@@ -415,16 +415,25 @@ elif "Match" in pagina:
     col_sel, col_cfg = st.columns([3, 1])
 
     with col_sel:
-        vagas_opts = {
-            f"#{row['id_vaga']} — {row.get('informacoes_basicas__titulo_vaga', '')}": row["id_vaga"]
-            for _, row in motor.df_vagas.iterrows()
-        }
-        vaga_label = st.selectbox("Selecione a Vaga", list(vagas_opts.keys()))
+        # Ordena vagas com skills primeiro
+        vagas_com_skills = motor.df_vagas[motor.df_vagas["skills_texto"].str.strip() != ""]
+        vagas_sem_skills = motor.df_vagas[motor.df_vagas["skills_texto"].str.strip() == ""]
+        df_vagas_ordenadas = pd.concat([vagas_com_skills, vagas_sem_skills])
+
+        vagas_opts = {}
+        for _, row in df_vagas_ordenadas.iterrows():
+            skills = row.get("skills_texto", "").strip()
+            n_sk = len(skills.split()) if skills else 0
+            tag = f" 🎯 ({n_sk} skills: {skills[:35]}...)" if n_sk > 0 else " ⚠️ [sem skills cadastradas]"
+            label = f"#{row['id_vaga']} — {row.get('informacoes_basicas__titulo_vaga', '')}{tag}"
+            vagas_opts[label] = row["id_vaga"]
+
+        vaga_label = st.selectbox("Selecione a Vaga", list(vagas_opts.keys()), key="select_vaga_match")
         id_vaga_sel = str(vagas_opts[vaga_label])
 
     with col_cfg:
-        top_n = st.number_input("Top N candidatos", min_value=5, max_value=50, value=10)
-        apenas_skills = st.toggle("Apenas com skills", value=False)
+        top_n = st.number_input("Top N candidatos", min_value=5, max_value=50, value=10, key="input_top_n")
+        apenas_skills = st.toggle("Apenas candidatos com skills", value=True, key="toggle_apenas_skills")
 
     # ── Info da vaga selecionada ───────────────────────────────────
     idx_v = motor.idx_vaga.get(id_vaga_sel)
@@ -446,40 +455,49 @@ elif "Match" in pagina:
                 ])
                 st.markdown(badges, unsafe_allow_html=True)
             else:
-                st.caption("Nenhuma skill detectada automaticamente")
+                st.warning("⚠️ Esta vaga não possui hard skills detectadas na descrição/atividades. Selecione uma vaga marcada com 🎯 para visualizar o match técnico.")
 
     st.divider()
 
-    if st.button("🔍 Buscar Candidatos", use_container_width=True):
-        with st.spinner("Calculando similaridade cosseno..."):
-            from sklearn.metrics.pairwise import cosine_similarity
+    if st.button("🔍 Buscar Candidatos", use_container_width=True, key="btn_buscar_candidatos"):
+        if not skills_vaga.strip():
+            st.error("❌ Não é possível calcular match: esta vaga não possui requisitos técnicos descritos.")
+        else:
+            with st.spinner("Calculando similaridade cosseno..."):
+                from sklearn.metrics.pairwise import cosine_similarity
 
-            idx_v    = motor.idx_vaga[id_vaga_sel]
-            vetor_v  = motor.matriz_vagas[idx_v]
-            scores   = cosine_similarity(vetor_v, motor.matriz_talentos).flatten()
+                idx_v    = motor.idx_vaga[id_vaga_sel]
+                vetor_v  = motor.matriz_vagas[idx_v]
+                scores   = cosine_similarity(vetor_v, motor.matriz_talentos).flatten()
 
-            if apenas_skills:
-                mask = motor.df_talentos["skills_texto"].str.strip() != ""
-                scores[~mask.values] = -1
+                if apenas_skills:
+                    mask = motor.df_talentos["skills_texto"].str.strip() != ""
+                    scores[~mask.values] = -1
 
-            top_idx  = np.argsort(scores)[::-1][:int(top_n)]
-            resultados = []
+                top_idx  = np.argsort(scores)[::-1][:int(top_n)]
+                resultados = []
 
-            for rank, idx_t in enumerate(top_idx, 1):
-                rt = motor.df_talentos.iloc[idx_t]
-                resultados.append({
-                    "rank"             : rank,
-                    "id_talento"       : rt.get("id_talento", ""),
-                    "nome"             : rt.get("nome", "—"),
-                    "origem"           : rt.get("origem", "—"),
-                    "titulo"           : rt.get("titulo_profissional", ""),
-                    "nivel"            : rt.get("nivel_profissional", ""),
-                    "area"             : rt.get("area_atuacao", ""),
-                    "skills"           : rt.get("skills_texto", ""),
-                    "score"            : round(float(scores[idx_t]), 4),
-                })
+                for rank, idx_t in enumerate(top_idx, 1):
+                    if scores[idx_t] <= 0 and apenas_skills:
+                        continue
+                    rt = motor.df_talentos.iloc[idx_t]
+                    resultados.append({
+                        "rank"             : rank,
+                        "id_talento"       : rt.get("id_talento", ""),
+                        "nome"             : rt.get("nome", "—"),
+                        "origem"           : rt.get("origem", "—"),
+                        "titulo"           : rt.get("titulo_profissional", ""),
+                        "nivel"            : rt.get("nivel_profissional", ""),
+                        "area"             : rt.get("area_atuacao", ""),
+                        "skills"           : rt.get("skills_texto", ""),
+                        "score"            : round(float(scores[idx_t]), 4),
+                    })
 
-            df_res = pd.DataFrame(resultados)
+                df_res = pd.DataFrame(resultados)
+
+            if df_res.empty or (df_res["score"] <= 0).all():
+                st.info("ℹ️ Nenhum candidato aderente encontrado com os filtros atuais.")
+            else:
 
         # ── Gráfico de barras de score ─────────────────────────────
         st.markdown("### 📊 Score de Similaridade — Top Candidatos")
@@ -828,12 +846,15 @@ elif "Copiloto" in pagina:
     st.divider()
 
     if "Motor" in modo:
-        col_v, col_c = st.columns(2)
         with col_v:
+            vagas_com_skills2 = motor.df_vagas[motor.df_vagas["skills_texto"].str.strip() != ""]
             vagas_opts2 = {
-                f"#{r['id_vaga']} — {r.get('informacoes_basicas__titulo_vaga', '')}": r["id_vaga"]
-                for _, r in motor.df_vagas.iterrows()
+                f"#{r['id_vaga']} — {r.get('informacoes_basicas__titulo_vaga', '')} ({len(r.get('skills_texto','').split())} skills)": r["id_vaga"]
+                for _, r in vagas_com_skills2.iterrows()
             }
+            if not vagas_opts2:
+                vagas_opts2 = {f"#{r['id_vaga']}": r["id_vaga"] for _, r in motor.df_vagas.iterrows()}
+
             vaga_label2 = st.selectbox("Vaga", list(vagas_opts2.keys()), key="cop_vaga")
             id_v2 = str(vagas_opts2[vaga_label2])
             row_v2 = motor.df_vagas.iloc[motor.idx_vaga[id_v2]]
@@ -841,21 +862,33 @@ elif "Copiloto" in pagina:
             st.caption(f"Skills detectadas: `{vaga_skills_input or 'nenhuma'}`")
 
         with col_c:
-            # Top 10 candidatos da vaga
+            # Top candidatos com match positivo
             from sklearn.metrics.pairwise import cosine_similarity as cs
             scores_c = cs(motor.matriz_vagas[motor.idx_vaga[id_v2]], motor.matriz_talentos).flatten()
-            top10 = np.argsort(scores_c)[::-1][:10]
-            cands_opts = {
-                f"#{motor.df_talentos.iloc[i].get('id_talento',i)} — "
-                f"{motor.df_talentos.iloc[i].get('nome','?')} "
-                f"(score: {scores_c[i]:.3f})": i
-                for i in top10
-            }
-            cand_label = st.selectbox("Candidato (top-10 do match)", list(cands_opts.keys()), key="cop_cand")
+            mask_skills = motor.df_talentos["skills_texto"].str.strip() != ""
+            scores_c[~mask_skills.values] = -1
+
+            top_candidates_idx = [i for i in np.argsort(scores_c)[::-1] if scores_c[i] > 0][:10]
+
+            if top_candidates_idx:
+                cands_opts = {
+                    f"#{motor.df_talentos.iloc[i].get('id_talento',i)} — "
+                    f"{motor.df_talentos.iloc[i].get('nome','?')} "
+                    f"(score: {scores_c[i]:.3f})": i
+                    for i in top_candidates_idx
+                }
+            else:
+                cands_opts = {"Nenhum candidato com match técnico": -1}
+
+            cand_label = st.selectbox("Candidato (top match)", list(cands_opts.keys()), key="cop_cand")
             idx_c2 = cands_opts[cand_label]
-            row_c2 = motor.df_talentos.iloc[idx_c2]
-            cand_skills_input = row_c2.get("skills_texto", "")
-            nome_cand = row_c2.get("nome", "Candidato")
+            if idx_c2 >= 0:
+                row_c2 = motor.df_talentos.iloc[idx_c2]
+                cand_skills_input = row_c2.get("skills_texto", "")
+                nome_cand = row_c2.get("nome", "Candidato")
+            else:
+                cand_skills_input = ""
+                nome_cand = "Candidato"
             st.caption(f"Skills detectadas: `{cand_skills_input or 'nenhuma'}`")
 
         titulo_vaga_c = row_v2.get("informacoes_basicas__titulo_vaga", "")
