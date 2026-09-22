@@ -845,6 +845,7 @@ elif "Copiloto" in pagina:
     st.divider()
 
     if "Motor" in modo:
+        col_v, col_c = st.columns(2)
         with col_v:
             vagas_com_skills2 = motor.df_vagas[motor.df_vagas["skills_texto"].str.strip() != ""]
             vagas_opts2 = {
