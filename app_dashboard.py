@@ -290,10 +290,10 @@ if "Home" in pagina:
 
     st.divider()
 
-    col_a, col_b = st.columns([1, 1])
+    col_origem, col_info = st.columns([1, 1])
 
     # ── Distribuição de origens ────────────────────────────────────
-    with col_a:
+    with col_origem:
         st.markdown("### 📊 Distribuição por Origem")
         origem_counts = df_talentos["origem"].value_counts().reset_index()
         origem_counts.columns = ["Origem", "Quantidade"]
@@ -312,73 +312,17 @@ if "Home" in pagina:
         fig_origem.update_traces(textfont_color="white", textinfo="percent+label")
         st.plotly_chart(fig_origem, use_container_width=True, key="chart_origem")
 
-    # ── Top skills nas vagas ───────────────────────────────────────
-    with col_b:
-        st.markdown("### 🛠️ Top 15 Skills — Vagas")
-        from collections import Counter
-        skills_v = Counter(
-            s for lst in df_vagas["hard_skills__texto_vaga_processado"].dropna()
-            for s in (lst if isinstance(lst, list) else str(lst).split())
-            if s
-        )
-        df_skills_v = pd.DataFrame(skills_v.most_common(15), columns=["Skill", "Count"])
-        fig_skills = px.bar(
-            df_skills_v, x="Count", y="Skill", orientation="h",
-            color="Count", color_continuous_scale=["#6C63FF", "#FF6584"],
-        )
-        fig_skills.update_layout(
-            paper_bgcolor="#1A1D27", plot_bgcolor="#1A1D27",
-            font_color="#CCCCCC", showlegend=False, coloraxis_showscale=False,
-            yaxis=dict(autorange="reversed"),
-            margin=dict(l=10, r=10, t=10, b=10),
-        )
-        fig_skills.update_traces(marker_line_width=0)
-        st.plotly_chart(fig_skills, use_container_width=True, key="chart_skills_vagas")
+    with col_info:
+        st.markdown("### 📌 Resumo Operacional")
+        st.markdown(f"""
+        - **Total de Vagas Registradas:** `{n_vagas_total:,}`
+        - **Base Total de Talentos:** `{n_talentos:,}`
+        - **Candidatos Ativos (Applicants):** `{n_applicants:,}`
+        - **Perfis Mapeados (Prospects):** `{n_prospects:,}`
+        - **Taxa de Currículos Completos:** `{taxa_cv:.1%}`
 
-    st.divider()
-
-    col_c, col_d = st.columns([1, 1])
-
-    # ── Top skills nos talentos ────────────────────────────────────
-    with col_c:
-        st.markdown("### 👤 Top 15 Skills — Talentos")
-        from collections import Counter as Ctr
-        skills_t = Ctr(
-            s for lst in df_talentos["hard_skills__texto_talento_processado"].dropna()
-            for s in (lst if isinstance(lst, list) else str(lst).split())
-            if s
-        )
-        df_skills_t = pd.DataFrame(skills_t.most_common(15), columns=["Skill", "Count"])
-        fig_skills_t = px.bar(
-            df_skills_t, x="Count", y="Skill", orientation="h",
-            color="Count", color_continuous_scale=["#43D9AD", "#FFB347"],
-        )
-        fig_skills_t.update_layout(
-            paper_bgcolor="#1A1D27", plot_bgcolor="#1A1D27",
-            font_color="#CCCCCC", showlegend=False, coloraxis_showscale=False,
-            yaxis=dict(autorange="reversed"),
-            margin=dict(l=10, r=10, t=10, b=10),
-        )
-        fig_skills_t.update_traces(marker_line_width=0)
-        st.plotly_chart(fig_skills_t, use_container_width=True, key="chart_skills_talentos")
-
-    # ── Distribuição de skills por talento ────────────────────────
-    with col_d:
-        st.markdown("### 📈 Distribuição de Skills por Talento")
-        n_skills_series = df_talentos["hard_skills__texto_talento_processado"].apply(
-            lambda x: len(x) if isinstance(x, list) else len(str(x).split()) if x else 0
-        )
-        fig_hist = px.histogram(
-            n_skills_series[n_skills_series > 0],
-            nbins=20, color_discrete_sequence=["#6C63FF"],
-            labels={"value": "Nº de Skills", "count": "Talentos"},
-        )
-        fig_hist.update_layout(
-            paper_bgcolor="#1A1D27", plot_bgcolor="#1A1D27",
-            font_color="#CCCCCC", showlegend=False,
-            margin=dict(l=10, r=10, t=10, b=10),
-        )
-        st.plotly_chart(fig_hist, use_container_width=True, key="chart_hist_skills")
+        > Utilize a aba **🎯 Motor de Match** no menu lateral para selecionar uma vaga técnica e ranquear os candidatos mais aderentes por similaridade técnica (TF-IDF).
+        """)
 
     st.divider()
     st.markdown("### 📋 Amostra — Vagas Carregadas")
