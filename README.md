@@ -10,7 +10,6 @@ Sistema de IA para recrutamento e selecao de profissionais de TI em bodyshop.
 
 - **Extracao de Skills** via Regex + NLP sobre CVs e descricoes de vagas
 - **Motor de Match** TF-IDF + Cosine Similarity
-- **Segmentacao de Talentos** K-Means + PCA
 - **Copiloto de Entrevistas** Google Gemini
 
 ## Paginas
@@ -19,7 +18,6 @@ Sistema de IA para recrutamento e selecao de profissionais de TI em bodyshop.
 |---|---|
 | Home | KPIs, distribuicao, top skills |
 | Motor de Match | Ranking de candidatos por vaga |
-| Clustering | K-Means + scatter PCA 2D |
 | Copiloto | Roteiro de entrevista com Gemini |
 
 ## Instalacao local

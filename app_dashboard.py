@@ -9,7 +9,6 @@
   Estrutura das páginas:
     🏠  Home          — KPIs e visão geral da base
     🎯  Motor de Match — ranking de candidatos por vaga
-    🔬  Clustering     — segmentação de perfis (K-Means + PCA)
     🤖  Copiloto       — roteiro de entrevista com Gemini
 ================================================================================
 """
@@ -211,7 +210,7 @@ with st.sidebar:
 
     pagina = st.radio(
         "Navegação",
-        ["🏠  Home", "🎯  Motor de Match", "🔬  Clustering", "🤖  Copiloto"],
+        ["🏠  Home", "🎯  Motor de Match", "🤖  Copiloto"],
         label_visibility="collapsed",
         key="nav_pagina",
     )
@@ -238,7 +237,6 @@ with st.sidebar:
     st.divider()
     st.caption("Pipeline: `pipeline_talentos.py`")
     st.caption("Motor: `motor_match.py`")
-    st.caption("Cluster: `clustering_talentos.py`")
     st.caption("Copiloto: `copiloto_entrevistas.py`")
 
 
@@ -593,241 +591,7 @@ elif "Match" in pagina:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# PÁGINA 3 — CLUSTERING
-# ──────────────────────────────────────────────────────────────────────────────
-
-elif "Clustering" in pagina:
-    st.markdown("# 🔬 Análise de Clusters — Segmentação de Talentos")
-    st.markdown("Identifique as personas ocultas na base de talentos via K-Means + PCA.")
-    st.divider()
-
-    from clustering_talentos import engenharia_features, normalizar, FEATURES
-
-    col_k1, col_k2, col_k3 = st.columns([1, 1, 2])
-    with col_k1:
-        k_max = st.slider("K máximo (cotovelo)", 3, 12, 10)
-    with col_k2:
-        k_final = st.slider("K final (clusters)", 2, 10, 4)
-    with col_k3:
-        st.markdown(" ")
-        rodar = st.button("▶ Executar Clustering", use_container_width=True)
-
-    if rodar or "df_clustered" in st.session_state:
-        if rodar:
-            with st.spinner("Calculando features e rodando K-Means..."):
-                from sklearn.cluster import KMeans
-                from sklearn.decomposition import PCA
-                from sklearn.metrics import silhouette_score
-
-                df_feat = engenharia_features(df_talentos)
-                X_scaled, _ = normalizar(df_feat)
-
-                # Elbow
-                inercias, silhs = [], []
-                for k in range(1, k_max + 1):
-                    km = KMeans(n_clusters=k, random_state=42, n_init=10)
-                    km.fit(X_scaled)
-                    inercias.append(km.inertia_)
-                    if k >= 2:
-                        silhs.append(silhouette_score(X_scaled, km.labels_))
-                    else:
-                        silhs.append(None)
-
-                # K-Means final
-                km_final = KMeans(n_clusters=k_final, random_state=42, n_init=20)
-                labels   = km_final.fit_predict(X_scaled)
-                sil_final = silhouette_score(X_scaled, labels)
-
-                pca = PCA(n_components=2, random_state=42)
-                X_pca = pca.fit_transform(X_scaled)
-                var_exp = pca.explained_variance_ratio_
-
-                df_feat = df_feat.copy()
-                df_feat["cluster"] = [f"Cluster {c}" for c in labels]
-                df_feat["PC1"] = X_pca[:, 0]
-                df_feat["PC2"] = X_pca[:, 1]
-
-                st.session_state["df_clustered"] = df_feat
-                st.session_state["inercias"]     = inercias
-                st.session_state["silhs"]        = silhs
-                st.session_state["sil_final"]    = sil_final
-                st.session_state["var_exp"]      = var_exp
-                st.session_state["k_max_used"]   = k_max
-                st.session_state["k_final_used"] = k_final
-
-        # Recupera do session state
-        df_c    = st.session_state["df_clustered"]
-        inercias= st.session_state["inercias"]
-        silhs   = st.session_state["silhs"]
-        sil_fin = st.session_state["sil_final"]
-        var_exp = st.session_state["var_exp"]
-        k_max_u = st.session_state["k_max_used"]
-        k_fin_u = st.session_state["k_final_used"]
-
-        st.divider()
-
-        # ── KPIs do clustering ─────────────────────────────────────
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("K selecionado", k_fin_u)
-        m2.metric("Silhouette Score", f"{sil_fin:.4f}")
-        m3.metric("PC1 variância", f"{var_exp[0]:.1%}")
-        m4.metric("PC2 variância", f"{var_exp[1]:.1%}")
-
-        st.divider()
-        col_el, col_scat = st.columns([1, 1])
-
-        # ── Gráfico do cotovelo ────────────────────────────────────
-        with col_el:
-            st.markdown("### 📉 Método do Cotovelo")
-            ks = list(range(1, k_max_u + 1))
-            fig_el = go.Figure()
-            fig_el.add_trace(go.Scatter(
-                x=ks, y=inercias, mode="lines+markers",
-                line=dict(color="#6C63FF", width=2.5),
-                marker=dict(size=8, color="#FF6584", line=dict(color="white", width=1.5)),
-                name="Inércia",
-                fill="tozeroy", fillcolor="rgba(108,99,255,0.08)",
-            ))
-            fig_el.update_layout(
-                paper_bgcolor="#1A1D27", plot_bgcolor="#1A1D27",
-                font_color="#CCCCCC",
-                xaxis=dict(title="K", dtick=1, gridcolor="#2D2F3E"),
-                yaxis=dict(title="Inércia (SSE)", gridcolor="#2D2F3E"),
-                showlegend=False, margin=dict(l=10, r=10, t=10, b=10),
-            )
-            # Linha do K selecionado
-            fig_el.add_vline(x=k_fin_u, line_dash="dash", line_color="#FFB347",
-                             annotation_text=f"K={k_fin_u}", annotation_font_color="#FFB347")
-            st.plotly_chart(fig_el, use_container_width=True, key="chart_elbow")
-
-            # Silhouette
-            ks_sil = [k for k, s in zip(ks, silhs) if s is not None]
-            vals_sil = [s for s in silhs if s is not None]
-            fig_sil = go.Figure()
-            fig_sil.add_trace(go.Scatter(
-                x=ks_sil, y=vals_sil, mode="lines+markers",
-                line=dict(color="#43D9AD", width=2.5),
-                marker=dict(size=8, color="#FFB347", line=dict(color="white", width=1.5)),
-                name="Silhouette",
-                fill="tozeroy", fillcolor="rgba(67,217,173,0.08)",
-            ))
-            fig_sil.update_layout(
-                paper_bgcolor="#1A1D27", plot_bgcolor="#1A1D27",
-                font_color="#CCCCCC",
-                xaxis=dict(title="K", dtick=1, gridcolor="#2D2F3E"),
-                yaxis=dict(title="Silhouette Score", gridcolor="#2D2F3E"),
-                showlegend=False, margin=dict(l=10, r=10, t=10, b=30),
-            )
-            if vals_sil:
-                best_k_sil = ks_sil[vals_sil.index(max(vals_sil))]
-                fig_sil.add_vline(x=best_k_sil, line_dash="dash", line_color="#FF6584",
-                                  annotation_text=f"melhor K={best_k_sil}",
-                                  annotation_font_color="#FF6584")
-            st.plotly_chart(fig_sil, use_container_width=True, key="chart_silhouette")
-
-        # ── Scatter PCA ────────────────────────────────────────────
-        with col_scat:
-            st.markdown("### 🌐 Scatter PCA 2D — Clusters")
-            PALETTE = ["#6C63FF","#FF6584","#43D9AD","#FFB347","#54A0FF",
-                       "#FF6B6B","#48DBFB","#FF9F43","#1DD1A1","#5F27CD"]
-            df_c["n_skills_show"] = df_c["n_hard_skills"].clip(0, 20)
-            fig_pca = px.scatter(
-                df_c, x="PC1", y="PC2",
-                color="cluster",
-                size="n_skills_show",
-                size_max=25,
-                color_discrete_sequence=PALETTE,
-                hover_data={
-                    "nome"       : True if "nome" in df_c.columns else False,
-                    "n_hard_skills": True,
-                    "exp_anos"   : True,
-                    "cluster"    : True,
-                    "PC1"        : False,
-                    "PC2"        : False,
-                    "n_skills_show": False,
-                },
-                labels={"PC1": f"PC1 ({var_exp[0]:.1%})", "PC2": f"PC2 ({var_exp[1]:.1%})"},
-                opacity=0.75,
-            )
-            fig_pca.update_layout(
-                paper_bgcolor="#1A1D27", plot_bgcolor="#1A1D27",
-                font_color="#CCCCCC",
-                legend=dict(bgcolor="#1A1D27", bordercolor="#333"),
-                margin=dict(l=10, r=10, t=10, b=10),
-                height=500,
-            )
-            fig_pca.update_traces(marker_line_width=0.5, marker_line_color="white")
-            st.plotly_chart(fig_pca, use_container_width=True, key="chart_pca")
-
-        st.divider()
-
-        # ── Interpretação dos clusters ─────────────────────────────
-        st.markdown("### 🧬 Perfis por Cluster")
-        agg = df_c.groupby("cluster").agg(
-            N              = ("cluster", "count"),
-            Media_Skills   = ("n_hard_skills", "mean"),
-            Max_Skills     = ("n_hard_skills", "max"),
-            Media_Exp_Anos = ("exp_anos", "mean"),
-            Pct_CV         = ("tem_cv", "mean"),
-        ).round(2).reset_index()
-        agg["Pct_CV"] = (agg["Pct_CV"] * 100).round(0).astype(str) + "%"
-
-        # Score de senioridade simplificado
-        agg["Score"] = (
-            (agg["Media_Skills"] / agg["Media_Skills"].max()) * 0.5 +
-            (agg["Media_Exp_Anos"].clip(0, 30) / 30) * 0.3
-        ).round(3)
-        agg = agg.sort_values("Score", ascending=False)
-
-        PERSONAS = {0: "👑 Alto Impacto", 1: "⚡ Experiente", 2: "🔵 Transição", 3: "⚪ Desenvolvimento"}
-        agg["Persona"] = [PERSONAS.get(i, f"Grupo {i}") for i in range(len(agg))]
-
-        col_cards = st.columns(min(len(agg), 4))
-        for i, (_, row) in enumerate(agg.iterrows()):
-            if i < len(col_cards):
-                with col_cards[i]:
-                    cor = PALETTE[i % len(PALETTE)]
-                    st.markdown(f"""
-                    <div style="background:linear-gradient(135deg,#1E2030,#252840);
-                                border:1px solid {cor}55; border-radius:12px; padding:16px;
-                                border-top:3px solid {cor};">
-                      <div style="font-size:1rem; font-weight:700; color:{cor};">
-                        {row['cluster']}
-                      </div>
-                      <div style="font-size:0.85rem; color:#9999BB; margin-bottom:12px;">
-                        {row['Persona']}
-                      </div>
-                      <div style="color:#E0E0E0;"><b>{int(row['N'])}</b> candidatos</div>
-                      <div style="color:#E0E0E0;">Média skills: <b>{row['Media_Skills']:.1f}</b></div>
-                      <div style="color:#E0E0E0;">Média exp: <b>{row['Media_Exp_Anos']:.1f} anos</b></div>
-                      <div style="color:#E0E0E0;">CVs: <b>{row['Pct_CV']}</b></div>
-                      <div style="margin-top:8px; font-size:0.8rem; color:#7C7FFF;">
-                        Score: {row['Score']:.3f}
-                      </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-        # Feature importance
-        st.divider()
-        st.markdown("### 📊 Distribuição de Features por Cluster")
-        feat_sel = st.selectbox("Feature", FEATURES)
-        fig_box = px.box(
-            df_c, x="cluster", y=feat_sel, color="cluster",
-            color_discrete_sequence=PALETTE,
-        )
-        fig_box.update_layout(
-            paper_bgcolor="#1A1D27", plot_bgcolor="#1A1D27",
-            font_color="#CCCCCC", showlegend=False,
-            margin=dict(l=10, r=10, t=10, b=10),
-        )
-        st.plotly_chart(fig_box, use_container_width=True, key="chart_boxplot")
-
-    else:
-        st.info("Configure os parâmetros e clique em **▶ Executar Clustering**.")
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# PÁGINA 4 — COPILOTO DE ENTREVISTAS
+# PÁGINA 3 — COPILOTO DE ENTREVISTAS
 # ──────────────────────────────────────────────────────────────────────────────
 
 elif "Copiloto" in pagina:
