@@ -498,96 +498,95 @@ elif "Match" in pagina:
             if df_res.empty or (df_res["score"] <= 0).all():
                 st.info("ℹ️ Nenhum candidato aderente encontrado com os filtros atuais.")
             else:
+                # ── Gráfico de barras de score ─────────────────────────────
+                st.markdown("### 📊 Score de Similaridade — Top Candidatos")
+                df_plot = df_res[df_res["score"] > 0].copy()
+                df_plot["label"] = df_plot["nome"].str[:25] + " (#" + df_plot["id_talento"].astype(str) + ")"
+                fig_score = px.bar(
+                    df_plot, x="score", y="label", orientation="h",
+                    color="score",
+                    color_continuous_scale=["#3D3F7A", "#6C63FF", "#FF6584"],
+                    range_color=[0, 1],
+                    labels={"score": "Score", "label": "Candidato"},
+                    text=df_plot["score"].apply(lambda x: f"{x:.3f}"),
+                )
+                fig_score.update_layout(
+                    paper_bgcolor="#1A1D27", plot_bgcolor="#1A1D27",
+                    font_color="#CCCCCC", showlegend=False, coloraxis_showscale=False,
+                    yaxis=dict(autorange="reversed"),
+                    margin=dict(l=10, r=20, t=10, b=10),
+                    height=max(300, len(df_plot) * 38),
+                )
+                fig_score.update_traces(textposition="outside", textfont_color="white", marker_line_width=0)
+                st.plotly_chart(fig_score, use_container_width=True, key="chart_match_score")
 
-        # ── Gráfico de barras de score ─────────────────────────────
-        st.markdown("### 📊 Score de Similaridade — Top Candidatos")
-        df_plot = df_res[df_res["score"] > 0].copy()
-        df_plot["label"] = df_plot["nome"].str[:25] + " (#" + df_plot["id_talento"].astype(str) + ")"
-        fig_score = px.bar(
-            df_plot, x="score", y="label", orientation="h",
-            color="score",
-            color_continuous_scale=["#3D3F7A", "#6C63FF", "#FF6584"],
-            range_color=[0, 1],
-            labels={"score": "Score", "label": "Candidato"},
-            text=df_plot["score"].apply(lambda x: f"{x:.3f}"),
-        )
-        fig_score.update_layout(
-            paper_bgcolor="#1A1D27", plot_bgcolor="#1A1D27",
-            font_color="#CCCCCC", showlegend=False, coloraxis_showscale=False,
-            yaxis=dict(autorange="reversed"),
-            margin=dict(l=10, r=20, t=10, b=10),
-            height=max(300, len(df_plot) * 38),
-        )
-        fig_score.update_traces(textposition="outside", textfont_color="white", marker_line_width=0)
-        st.plotly_chart(fig_score, use_container_width=True, key="chart_match_score")
+                st.divider()
+                st.markdown("### 👥 Candidatos Recomendados")
 
-        st.divider()
-        st.markdown("### 👥 Candidatos Recomendados")
+                # Análise de skills por candidato
+                from copiloto_entrevistas import analisar_skills
 
-        # Análise de skills por candidato
-        from copiloto_entrevistas import analisar_skills
+                for _, row in df_res.iterrows():
+                    if row["score"] <= 0:
+                        continue
+                    analise = analisar_skills(
+                        skills_vaga.split() if skills_vaga else [],
+                        row["skills"].split() if row["skills"] else [],
+                    )
 
-        for _, row in df_res.iterrows():
-            if row["score"] <= 0:
-                continue
-            analise = analisar_skills(
-                skills_vaga.split() if skills_vaga else [],
-                row["skills"].split() if row["skills"] else [],
-            )
+                    score_pct = int(row["score"] * 100)
+                    cor_score = "#43D9AD" if score_pct >= 40 else "#FFB347" if score_pct >= 20 else "#FF6584"
 
-            score_pct = int(row["score"] * 100)
-            cor_score = "#43D9AD" if score_pct >= 40 else "#FFB347" if score_pct >= 20 else "#FF6584"
+                    with st.container():
+                        st.markdown(f"""
+                        <div class="candidate-card">
+                          <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                              <span style="font-size:1.1rem; font-weight:700; color:#C0C3FF;">
+                                #{row['rank']} &nbsp; {row['nome']}
+                              </span>
+                              &nbsp;
+                              <span style="background:#2D2F4A; border-radius:12px; padding:2px 8px;
+                                           font-size:0.75rem; color:#9999BB;">
+                                {row['origem']}
+                              </span>
+                            </div>
+                            <div style="text-align:right;">
+                              <span style="font-size:1.4rem; font-weight:800; color:{cor_score};">
+                                {row['score']:.3f}
+                              </span>
+                              <div style="width:100px; height:6px; background:#2D2F3E; border-radius:3px; margin-top:4px;">
+                                <div style="width:{score_pct}%; height:100%;
+                                            background:linear-gradient(90deg,#6C63FF,#FF6584);
+                                            border-radius:3px;"></div>
+                              </div>
+                            </div>
+                          </div>
+                          <div style="margin-top:8px; font-size:0.85rem; color:#9999BB;">
+                            {row['titulo'] or ''} {'· ' + row['area'] if row['area'] else ''}
+                            {'· Nível: ' + row['nivel'] if row['nivel'] else ''}
+                          </div>
+                          <div style="margin-top:10px;">
+                            {''.join([f'<span class="skill-badge">{s}</span>'
+                                      for s in analise['intersecao'][:8]])}
+                            {''.join([f'<span class="skill-badge skill-gap-badge">⚠️ {s}</span>'
+                                      for s in analise['lacunas'][:4]])}
+                            {''.join([f'<span class="skill-badge skill-extra-badge">+{s}</span>'
+                                      for s in analise['extras'][:4]])}
+                          </div>
+                          <div style="margin-top:6px; font-size:0.78rem; color:#888;">
+                            Cobertura: {analise['cobertura']:.0%} &nbsp;|&nbsp;
+                            {len(analise['intersecao'])} em comum &nbsp;|&nbsp;
+                            {len(analise['lacunas'])} lacunas
+                          </div>
+                        </div>
+                        """, unsafe_allow_html=True)
 
-            with st.container():
-                st.markdown(f"""
-                <div class="candidate-card">
-                  <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <div>
-                      <span style="font-size:1.1rem; font-weight:700; color:#C0C3FF;">
-                        #{row['rank']} &nbsp; {row['nome']}
-                      </span>
-                      &nbsp;
-                      <span style="background:#2D2F4A; border-radius:12px; padding:2px 8px;
-                                   font-size:0.75rem; color:#9999BB;">
-                        {row['origem']}
-                      </span>
-                    </div>
-                    <div style="text-align:right;">
-                      <span style="font-size:1.4rem; font-weight:800; color:{cor_score};">
-                        {row['score']:.3f}
-                      </span>
-                      <div style="width:100px; height:6px; background:#2D2F3E; border-radius:3px; margin-top:4px;">
-                        <div style="width:{score_pct}%; height:100%;
-                                    background:linear-gradient(90deg,#6C63FF,#FF6584);
-                                    border-radius:3px;"></div>
-                      </div>
-                    </div>
-                  </div>
-                  <div style="margin-top:8px; font-size:0.85rem; color:#9999BB;">
-                    {row['titulo'] or ''} {'· ' + row['area'] if row['area'] else ''}
-                    {'· Nível: ' + row['nivel'] if row['nivel'] else ''}
-                  </div>
-                  <div style="margin-top:10px;">
-                    {''.join([f'<span class="skill-badge">{s}</span>'
-                              for s in analise['intersecao'][:8]])}
-                    {''.join([f'<span class="skill-badge skill-gap-badge">⚠️ {s}</span>'
-                              for s in analise['lacunas'][:4]])}
-                    {''.join([f'<span class="skill-badge skill-extra-badge">+{s}</span>'
-                              for s in analise['extras'][:4]])}
-                  </div>
-                  <div style="margin-top:6px; font-size:0.78rem; color:#888;">
-                    Cobertura: {analise['cobertura']:.0%} &nbsp;|&nbsp;
-                    {len(analise['intersecao'])} em comum &nbsp;|&nbsp;
-                    {len(analise['lacunas'])} lacunas
-                  </div>
-                </div>
-                """, unsafe_allow_html=True)
-
-        # Tabela exportável
-        with st.expander("📥 Exportar resultado como tabela"):
-            st.dataframe(df_res, use_container_width=True, hide_index=True)
-            csv = df_res.to_csv(index=False).encode("utf-8")
-            st.download_button("⬇️ Baixar CSV", csv, f"match_vaga_{id_vaga_sel}.csv", "text/csv", key="btn_download_csv_match")
+                # Tabela exportável
+                with st.expander("📥 Exportar resultado como tabela"):
+                    st.dataframe(df_res, use_container_width=True, hide_index=True)
+                    csv = df_res.to_csv(index=False).encode("utf-8")
+                    st.download_button("⬇️ Baixar CSV", csv, f"match_vaga_{id_vaga_sel}.csv", "text/csv", key="btn_download_csv_match")
 
     else:
         st.info("Selecione uma vaga e clique em **Buscar Candidatos**.")
