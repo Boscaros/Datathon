@@ -156,8 +156,18 @@ class MotorMatch:
         self.df_vagas    = df_vagas.copy()
         self.df_talentos = df_talentos.copy()
 
-        self.df_vagas["skills_texto"]    = sanitizar_skills(df_vagas, col_skills_vaga)
-        self.df_talentos["skills_texto"] = sanitizar_skills(df_talentos, col_skills_tal)
+        # Usa coluna pré-calculada (Parquet cloud) se já existir,
+        # caso contrário computa a partir da coluna de listas (modo local).
+        if "skills_texto" not in self.df_vagas.columns:
+            self.df_vagas["skills_texto"] = sanitizar_skills(df_vagas, col_skills_vaga)
+        else:
+            self.df_vagas["skills_texto"] = self.df_vagas["skills_texto"].fillna("").astype(str)
+
+        if "skills_texto" not in self.df_talentos.columns:
+            self.df_talentos["skills_texto"] = sanitizar_skills(df_talentos, col_skills_tal)
+        else:
+            self.df_talentos["skills_texto"] = self.df_talentos["skills_texto"].fillna("").astype(str)
+
 
         # -- 2. Corpus combinado para fit (vocabulário único do ecossistema) --
         corpus_vagas    = self.df_vagas["skills_texto"].tolist()
@@ -169,8 +179,22 @@ class MotorMatch:
               f"({n_docs_nao_vazios:,} não-vazios)")
 
         # -- 3. Fit do TfidfVectorizer no corpus combinado -------------
+        # Guarda: se corpus completamente vazio (ex: Parquet sem skills),
+        # injeta vocabulário mínimo para evitar o erro "empty vocabulary".
+        corpus_efetivo = corpus_total if n_docs_nao_vazios > 0 else ["placeholder_skill"]
+
         self.vectorizer = TfidfVectorizer(**TFIDF_CONFIG)
-        self.vectorizer.fit(corpus_total)
+        try:
+            self.vectorizer.fit(corpus_efetivo)
+        except ValueError:
+            # Fallback absoluto: vocabulário fixo com skills comuns de TI
+            fallback_skills = (
+                "python java sql aws docker kubernetes linux git javascript "
+                "typescript react angular node spring oracle sap abap "
+                "azure gcp devops ci_cd terraform ansible scrum agile"
+            )
+            self.vectorizer.fit([fallback_skills])
+            print("[MOTOR] AVISO: corpus vazio — usando vocabulário fallback de TI")
 
         vocab_size = len(self.vectorizer.vocabulary_)
         print(f"[MOTOR] Vocabulário TF-IDF: {vocab_size:,} termos únicos")
