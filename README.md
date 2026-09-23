@@ -1,4 +1,4 @@
-# Decision Hunters - IA Dashboard
+# Caçador de Decisões - Dashboard
 
 > **Tech Challenge Datathon** | Pipeline de IA para matching de talentos em TI
 
